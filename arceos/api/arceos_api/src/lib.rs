@@ -403,3 +403,7 @@ pub mod modules {
     #[cfg(feature = "multitask")]
     pub use axtask;
 }
+
+
+pub mod random;
+pub use random::random_u64;

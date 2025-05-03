@@ -27,6 +27,8 @@ const CMD_TABLE: &[(&str, CmdHandler)] = &[
     ("pwd", do_pwd),
     ("rm", do_rm),
     ("uname", do_uname),
+    ("rename", do_rename),
+    ("mv", do_move),
 ];
 
 fn file_type_to_char(ty: FileType) -> char {
@@ -174,7 +176,7 @@ fn do_echo(args: &str) {
             print_err!("echo", fname, e);
         }
     } else {
-        println!("{}", args)
+        println!("{}", args);
     }
 }
 
@@ -270,6 +272,61 @@ fn do_help(_args: &str) {
 fn do_exit(_args: &str) {
     println!("Bye~");
     std::process::exit(0);
+}
+
+fn do_rename(args: &str) {
+    if args.is_empty() {
+        print_err!("rename", "missing operand");
+        return;
+    }
+
+    let name_count = args.split_whitespace().count();
+    if name_count != 2 {
+        print_err!("rename", "need 2 operand");
+        return;
+    }
+
+    let mut iter = args.split_whitespace();
+    let old_name = iter.next().unwrap();
+    let new_name = iter.next().unwrap();
+
+    fn rename(old_name: &str, new_name: &str) -> io::Result<()> {
+        fs::rename(old_name, new_name)
+    }
+
+    if let Err(e) = rename(old_name, new_name) {
+        print_err!("rename", format_args!("cannot rename '{old_name}' to '{new_name}'"), e);
+    }
+}
+
+// 只支持第一个参数是单个当前目录的文件名，第二个是目录名，下面没有对应同名文件
+fn do_move(args: &str) {
+    if args.is_empty() || args.split_whitespace().count() != 2 {
+        print_err!("mv", "missing operand, it need 2 path");
+        return;
+    }
+
+    let mut iter = args.split_whitespace();
+    let old_name = iter.next().unwrap();
+    let new_dir = iter.next().unwrap();
+
+    let new_name = format!("{}/{}", new_dir, old_name);
+    
+
+    fn copy_remove(old_name: &str, new_name: &str) -> io::Result<()> {
+        let buffer = fs::read(old_name)?;
+        // Vec<u8> 实现了 AsRef<[u8]> 接口, AsRef<[u8]> 只要传入的对象可以转换为字节切片就可以了
+        fs::write(new_name, buffer)?;
+        fs::remove_file(old_name)
+    }
+
+    // 创建 +　复制内容 + 删除
+    if let Err(e) = copy_remove(old_name, &new_name) {
+        print_err!("mv", format_args!("cannot move {old_name} to {new_name}"), e);
+        return;
+    }
+
+    // 成功
 }
 
 pub fn run_cmd(line: &[u8]) {

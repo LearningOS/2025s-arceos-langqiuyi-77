@@ -2,12 +2,14 @@
 
 use core::ffi::{c_void, c_char, c_int};
 use axhal::arch::TrapFrame;
+use axhal::mem::phys_to_virt;
 use axhal::trap::{register_trap_handler, SYSCALL};
 use axerrno::LinuxError;
 use axtask::current;
 use axtask::TaskExtRef;
 use axhal::paging::MappingFlags;
 use arceos_posix_api as api;
+use memory_addr::{VirtAddrRange, PAGE_SIZE_4K, is_aligned_4k};
 
 const SYS_IOCTL: usize = 29;
 const SYS_OPENAT: usize = 56;
@@ -135,12 +137,39 @@ fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
 fn sys_mmap(
     addr: *mut usize,
     length: usize,
-    prot: i32,
-    flags: i32,
+    _prot: i32,
+    _flags: i32,
     fd: i32,
     _offset: isize,
 ) -> isize {
-    unimplemented!("no sys_mmap!");
+    // To implement without affect original mod, implement in this file
+    // Minimize feature implementatin, addr is NONE, prot, flags, offset not used
+
+    // Get user space
+    let task = axtask::current();                  
+    let task_ref = task.as_task_ref();             
+    let task_inner = task_ref.inner();             
+    let ext = task_inner.task_ext();                    
+    let mut uspace = ext.aspace.lock();
+
+    // Allocate area, vaddr is virAddr allocated in user space
+    let hint = uspace.base(); // Get the base address of the address space  
+    let limit = VirtAddrRange::new(uspace.base(), uspace.end());  // For the limit, you might want to use the entire address space range
+    let aligned_length = (length + PAGE_SIZE_4K - 1) & !(PAGE_SIZE_4K - 1);  
+    let vaddr = uspace.find_free_area(hint, aligned_length, limit).unwrap();
+    assert!(is_aligned_4k(vaddr.as_usize()));
+    uspace.map_alloc(vaddr, aligned_length, MappingFlags::READ|MappingFlags::USER, true).unwrap(); 
+
+    // Convert vaddr in user space into physical addr and make use of phys_to_virt() to get virtaddr for keneral access
+    let (paddr, _, _) = uspace
+        .page_table()
+        .query(vaddr)
+        .unwrap_or_else(|_| panic!("Mapping failed for segment: {:#x}", vaddr));
+
+    api::sys_read(fd, phys_to_virt(paddr).as_mut_ptr() as *mut c_void, length);
+
+    // Return vaddr
+    vaddr.as_usize() as isize
 }
 
 fn sys_openat(dfd: c_int, fname: *const c_char, flags: c_int, mode: api::ctypes::mode_t) -> isize {

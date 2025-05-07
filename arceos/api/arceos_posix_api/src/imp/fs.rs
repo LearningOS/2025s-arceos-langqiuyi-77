@@ -1,4 +1,5 @@
 use alloc::sync::Arc;
+use axhal::{mem::VirtAddr, paging::MappingFlags};
 use core::ffi::{c_char, c_int};
 
 use axerrno::{LinuxError, LinuxResult};

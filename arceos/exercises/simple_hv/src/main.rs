@@ -83,6 +83,8 @@ fn vmexit_handler(ctx: &mut VmCpuRegisters) -> bool {
     match scause.cause() {
         Trap::Exception(Exception::VirtualSupervisorEnvCall) => {
             let sbi_msg = SbiMessage::from_regs(ctx.guest_regs.gprs.a_regs()).ok();
+            ctx.guest_regs.gprs.set_reg(A0, 0x6688);
+            ctx.guest_regs.gprs.set_reg(A1, 0x1234);
             ax_println!("VmExit Reason: VSuperEcall: {:?}", sbi_msg);
             if let Some(msg) = sbi_msg {
                 match msg {
@@ -102,16 +104,23 @@ fn vmexit_handler(ctx: &mut VmCpuRegisters) -> bool {
             }
         },
         Trap::Exception(Exception::IllegalInstruction) => {
-            panic!("Bad instruction: {:#x} sepc: {:#x}",
+            ax_println!("Bad instruction: {:#x} sepc: {:#x}",
                 stval::read(),
                 ctx.guest_regs.sepc
             );
+            // Return to next instruction
+            // usize 是一个值类型，它的大小可能是 4 字节或 8 字节，但它所表达的含义，永远是“多少个字节”。
+            // 就像你自己是一个 1.8 米的人，不代表你说“走 4 步”就等于走 4×1.8 米。
+            // 每一次加的单位都是字节 
+            ctx.guest_regs.sepc += 4;
         },
         Trap::Exception(Exception::LoadGuestPageFault) => {
-            panic!("LoadGuestPageFault: stval{:#x} sepc: {:#x}",
+            ax_println!("LoadGuestPageFault: stval{:#x} sepc: {:#x}",
                 stval::read(),
                 ctx.guest_regs.sepc
             );
+            // Return to next instruction
+            ctx.guest_regs.sepc += 4;
         },
         _ => {
             panic!(

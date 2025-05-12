@@ -7,6 +7,7 @@ extern crate log;
 extern crate alloc;
 extern crate axstd as std;
 use alloc::string::ToString;
+use axhal::mem::phys_to_virt;
 use riscv_vcpu::AxVCpuExitReason;
 use axerrno::{ax_err_type, AxResult};
 use memory_addr::VirtAddr;
@@ -20,6 +21,10 @@ const VM_ASPACE_SIZE: usize = 0x7fff_ffff_f000;
 const PHY_MEM_START: usize = 0x8000_0000;
 const PHY_MEM_SIZE: usize = 0x100_0000;
 const KERNEL_BASE: usize = 0x8020_0000;
+/// Physical address for pflash#1
+const PFLASH_START: usize = 0x2200_0000;
+
+use core::mem;
 
 use axmm::AddrSpace;
 use axhal::paging::MappingFlags;
@@ -60,15 +65,17 @@ fn main() {
                     assert_eq!(addr, 0x2200_0000.into(), "Now we ONLY handle pflash#2.");
                     let mapping_flags = MappingFlags::from_bits(0xf).unwrap();
                     // Passthrough-Mode
-                    let _ = aspace.map_linear(addr, addr.as_usize().into(), 4096, mapping_flags);
+                    // let _ = aspace.map_linear(addr, addr.as_usize().into(), 4096, mapping_flags);
 
-                    /*
                     // Emulator-Mode
                     // Pretend to load file to fill buffer.
-                    let buf = "pfld";
                     aspace.map_alloc(addr, 4096, mapping_flags, true);
-                    aspace.write(addr, buf.as_bytes());
-                    */
+                    let va = phys_to_virt(PFLASH_START.into()).as_usize();
+                    let ptr = va as *const u32;
+                    unsafe {
+                        let magic = mem::transmute::<u32, [u8; 4]>(*ptr);
+                        aspace.write(addr, &magic); // magic 是 HS 中的可以访问的地址， aspace 是 VS 空间 
+                    }
                 },
                 _ => {
                     panic!("Unhandled VM-Exit: {:?}", exit_reason);

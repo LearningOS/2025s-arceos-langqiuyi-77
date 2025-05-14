@@ -50,5 +50,5 @@ fn main() {
     if let Err(e) = process() {
         panic!("Error: {}", e);
     }
-    print!("\n[Ramfs-Rename]: ok!");
+    println!("\n[Ramfs-Rename]: ok!");
 }

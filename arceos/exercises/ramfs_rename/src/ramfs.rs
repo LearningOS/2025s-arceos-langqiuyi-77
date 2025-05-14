@@ -10,6 +10,7 @@ struct MyFileSystemIfImpl;
 #[crate_interface::impl_interface]
 impl MyFileSystemIf for MyFileSystemIfImpl {
     fn new_myfs(_disk: AxDisk) -> Arc<dyn VfsOps> {
+        // panic!("✅ new_myfs called!");
         Arc::new(RamFileSystem::new())
     }
 }
